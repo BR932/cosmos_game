@@ -15,6 +15,7 @@ dependencies:
   flame: ^1.37.0
   shared_preferences: ^2.5.4
   just_audio: ^0.10.5
+  flutter_svg: ^2.3.0
 
 dev_dependencies:
   flutter_test:
@@ -27,6 +28,8 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/images/
+    - assets/icons/
     - assets/music/button_sound_effect.mp3
     - assets/music/music_for_game.m4a
     - assets/music/muve_sound.mp3
