@@ -4,11 +4,14 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'audio/game_audio_controller.dart';
+import 'connectivity_service.dart';
 import 'game.dart';
+import 'progress_storage.dart';
 import 'system_ui_config.dart';
 import 'ui/game_hud.dart';
 import 'ui/game_over.dart';
 import 'ui/loading_screen.dart';
+import 'ui/offline_screen.dart';
 import 'ui/start_menu.dart';
 import 'ui/winner.dart';
 
@@ -19,6 +22,8 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
   await configureImmersiveSystemUi();
+  await ProgressStorage.instance.init();
+  await ConnectivityService.instance.init();
 
   runApp(const CyberRunnerApp());
 }
@@ -42,7 +47,9 @@ class CyberRunnerApp extends StatelessWidget {
         title: 'Space Chicken',
         theme: baseTheme.copyWith(
           textTheme: GoogleFonts.moulTextTheme(baseTheme.textTheme),
-          primaryTextTheme: GoogleFonts.moulTextTheme(baseTheme.primaryTextTheme),
+          primaryTextTheme: GoogleFonts.moulTextTheme(
+            baseTheme.primaryTextTheme,
+          ),
           snackBarTheme: SnackBarThemeData(
             contentTextStyle: GoogleFonts.moul(color: Colors.white),
           ),
@@ -63,18 +70,52 @@ class _GameShell extends StatefulWidget {
 class _GameShellState extends State<_GameShell> {
   CyberRunnerGame? _game;
   bool _showLoading = true;
+  bool _offlineScreenDismissed = false;
 
   @override
   void initState() {
     super.initState();
+    ConnectivityService.instance.isOffline.addListener(_onConnectivityChanged);
     _finishLoadingScreen();
   }
 
-  Future<void> _finishLoadingScreen() async {
-    await Future<void>.delayed(LoadingScreen.displayDuration);
+  @override
+  void dispose() {
+    ConnectivityService.instance.isOffline.removeListener(
+      _onConnectivityChanged,
+    );
+    super.dispose();
+  }
+
+  void _onConnectivityChanged() {
     if (!mounted) {
       return;
     }
+
+    if (!ConnectivityService.instance.isOffline.value) {
+      _offlineScreenDismissed = false;
+    }
+
+    setState(() {});
+  }
+
+  Future<void> _finishLoadingScreen() async {
+    final loadingStarted = DateTime.now();
+
+    await ConnectivityService.instance.waitForReliableCheck(
+      timeout: LoadingScreen.displayDuration + const Duration(seconds: 3),
+    );
+
+    final elapsed = DateTime.now().difference(loadingStarted);
+    final remaining = LoadingScreen.displayDuration - elapsed;
+    if (remaining > Duration.zero) {
+      await Future.delayed(remaining);
+    }
+
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
       _showLoading = false;
     });
@@ -97,8 +138,25 @@ class _GameShellState extends State<_GameShell> {
     });
   }
 
+  Future<void> _handleOfflineBack() async {
+    await GameAudioController.instance.playButtonSound();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _game = null;
+      _showLoading = true;
+      _offlineScreenDismissed = true;
+    });
+    await _finishLoadingScreen();
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_showLoading) {
+      return const LoadingScreen();
+    }
+
     final game = _game;
 
     if (game != null) {
@@ -122,8 +180,10 @@ class _GameShellState extends State<_GameShell> {
       );
     }
 
-    if (_showLoading) {
-      return const LoadingScreen();
+    final isOffline = ConnectivityService.instance.isOffline.value;
+
+    if (isOffline && !_offlineScreenDismissed) {
+      return OfflineScreen(onBack: _handleOfflineBack);
     }
 
     return StartMenu(onStart: _startGame);

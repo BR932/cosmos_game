@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
+
 import '../audio/game_audio_controller.dart';
+import '../external_link_launcher.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  static const String privacyPolicyUrl =
+      'https://spacechhicken.com/privacy-policy.html';
+  static const String supportUrl = 'https://spacechhicken.com/support.html';
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -47,6 +53,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await GameAudioController.instance.setSoundEnabled(_soundEnabled);
   }
 
+  Future<void> _openExternalLink(String url) async {
+    await GameAudioController.instance.playButtonSound();
+    if (!mounted) return;
+
+    final opened = await ExternalLinkLauncher.open(url);
+
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open link: $url')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -57,7 +76,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             'assets/images/Background_settings.png',
             fit: BoxFit.cover,
           ),
-
           if (_isLoading)
             const Center(
               child: CircularProgressIndicator(
@@ -142,12 +160,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       ),
                                     ],
                                   ),
-                                  SizedBox(height: 20),
+                                  const SizedBox(height: 20),
                                   GestureDetector(
-                                    onTap: () async {
-                                      await GameAudioController.instance
-                                          .playButtonSound();
-                                    },
+                                    onTap: () => _openExternalLink(
+                                      SettingsScreen.privacyPolicyUrl,
+                                    ),
                                     child: Image.asset(
                                       'assets/images/Privacy Policy.png',
                                       width: 180,
@@ -155,28 +172,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     ),
                                   ),
                                   GestureDetector(
-                                    onTap: () async {
-                                      await GameAudioController.instance
-                                          .playButtonSound();
-                                      if (!context.mounted) return;
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Поддержка: support@space-chicken.game',
-                                          ),
-                                        ),
-                                      );
-                                    },
+                                    onTap: () => _openExternalLink(
+                                      SettingsScreen.supportUrl,
+                                    ),
                                     child: Image.asset(
                                       'assets/images/Support.png',
                                       width: 180,
                                       fit: BoxFit.contain,
                                     ),
                                   ),
-
-                                  // КНОПКА BACK В НИЗУ КОНТЕЙНЕРА
                                 ],
                               ),
                             ),

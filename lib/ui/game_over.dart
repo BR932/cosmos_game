@@ -13,8 +13,15 @@ class GameOverOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: const Color(0xFF3A0B0B).withOpacity(0.8),
+    final double topPadding = MediaQuery.of(context).size.height * 0.25;
+
+    return Container(
+      decoration: const BoxDecoration(
+        image: DecorationImage(
+          image: AssetImage('assets/images/Background_game_over.png'),
+          fit: BoxFit.cover,
+        ),
+      ),
       child: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -24,6 +31,8 @@ class GameOverOverlay extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
+                  SizedBox(height: topPadding),
+
                   Image.asset(
                     'assets/images/game_over.png',
                     width: double.infinity,

@@ -1,6 +1,8 @@
 package com.space_chicken
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -11,6 +13,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val vibrationChannel = "space_chicken/vibration"
+    private val linksChannel = "space_chicken/links"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -23,6 +26,30 @@ class MainActivity : FlutterActivity() {
                 "crash" -> {
                     vibrateCrash()
                     result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            linksChannel
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "openUrl" -> {
+                    val url = call.argument<String>("url")
+                    if (url.isNullOrBlank()) {
+                        result.success(false)
+                        return@setMethodCallHandler
+                    }
+
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("OPEN_FAILED", e.message, null)
+                    }
                 }
                 else -> result.notImplemented()
             }

@@ -4,12 +4,12 @@ import 'dart:math' as math;
 import 'package:flame/components.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'audio/game_audio_controller.dart';
 import 'lane_manager.dart';
 import 'obstacle.dart';
 import 'player_car.dart';
+import 'progress_storage.dart';
 import 'ui/game_over.dart';
 import 'ui/winner.dart';
 
@@ -17,10 +17,8 @@ class CyberRunnerGame extends FlameGame with HasCollisionDetection {
   CyberRunnerGame({required this.onExitToMenu})
     : lanes = LaneManager(),
       stars = ValueNotifier<int>(0),
-      bestStars = ValueNotifier<int>(0),
+      bestStars = ProgressStorage.instance.bestStars,
       isGameOver = ValueNotifier<bool>(false);
-
-  static const String _bestScoreKey = 'best_stars';
 
   final LaneManager lanes;
   final ValueNotifier<int> stars;
@@ -45,7 +43,6 @@ class CyberRunnerGame extends FlameGame with HasCollisionDetection {
   late RoadComponent road;
 
   final math.Random _random = math.Random();
-  SharedPreferences? _preferences;
 
   double _distance = 0;
   double _spawnTimer = 0;
@@ -75,8 +72,6 @@ class CyberRunnerGame extends FlameGame with HasCollisionDetection {
   Future<void> onLoad() async {
     await super.onLoad();
     lanes.resize(size);
-    _preferences = await SharedPreferences.getInstance();
-    bestStars.value = _preferences?.getInt(_bestScoreKey) ?? 0;
 
     playerSprite = await loadSprite('object_for_line.png');
 
@@ -254,7 +249,7 @@ class CyberRunnerGame extends FlameGame with HasCollisionDetection {
           lane: lane,
           position: position,
           size: obstacleSize,
-          scoreChange: 10000, 
+          scoreChange: 12,
         ),
       );
     }
@@ -319,9 +314,7 @@ class CyberRunnerGame extends FlameGame with HasCollisionDetection {
     isGameOver.value = true;
     unawaited(GameAudioController.instance.playCrashVibration());
 
-    if (stars.value > bestStars.value) {
-      bestStars.value = stars.value;
-      await _preferences?.setInt(_bestScoreKey, bestStars.value);
+    if (await ProgressStorage.instance.saveBestScoreIfHigher(stars.value)) {
       overlays.add(WinnerOverlay.overlayId);
     } else {
       overlays.add(GameOverOverlay.overlayId);
