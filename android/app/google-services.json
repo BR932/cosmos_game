@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "920977444220",
+    "project_id": "testapkfile-38f96",
+    "storage_bucket": "testapkfile-38f96.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:920977444220:android:b9d15468bde580c46628f9",
+        "android_client_info": {
+          "package_name": "com.space_chicken"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB6hRzT8NfA-T5tbdDD-biDP7MnpyFoIYk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

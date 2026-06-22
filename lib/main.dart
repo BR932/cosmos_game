@@ -4,10 +4,12 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'audio/game_audio_controller.dart';
+import 'config/config_coordinator.dart';
 import 'connectivity_service.dart';
 import 'game.dart';
 import 'progress_storage.dart';
 import 'system_ui_config.dart';
+import 'ui/config_webview_screen.dart';
 import 'ui/game_hud.dart';
 import 'ui/game_over.dart';
 import 'ui/loading_screen.dart';
@@ -71,6 +73,7 @@ class _GameShellState extends State<_GameShell> with WidgetsBindingObserver {
   CyberRunnerGame? _game;
   bool _showLoading = true;
   bool _offlineScreenDismissed = false;
+  String? _configWebViewUrl;
 
   @override
   void initState() {
@@ -109,9 +112,13 @@ class _GameShellState extends State<_GameShell> with WidgetsBindingObserver {
   Future<void> _finishLoadingScreen() async {
     final loadingStarted = DateTime.now();
 
-    await ConnectivityService.instance.waitForReliableCheck(
-      timeout: LoadingScreen.displayDuration + const Duration(seconds: 3),
-    );
+    final results = await Future.wait<Object?>([
+      ConnectivityService.instance.waitForReliableCheck(
+        timeout: LoadingScreen.displayDuration + const Duration(seconds: 3),
+      ),
+      ConfigCoordinator.instance.resolveLaunchDecision(),
+    ]);
+    final decision = results[1]! as ConfigLaunchDecision;
 
     final elapsed = DateTime.now().difference(loadingStarted);
     final remaining = LoadingScreen.displayDuration - elapsed;
@@ -125,6 +132,15 @@ class _GameShellState extends State<_GameShell> with WidgetsBindingObserver {
 
     setState(() {
       _showLoading = false;
+      if (decision.target == ConfigLaunchTarget.webView) {
+        _configWebViewUrl = decision.url;
+      }
+    });
+  }
+
+  void _exitConfigWebView() {
+    setState(() {
+      _configWebViewUrl = null;
     });
   }
 
@@ -162,6 +178,14 @@ class _GameShellState extends State<_GameShell> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     if (_showLoading) {
       return const LoadingScreen();
+    }
+
+    final configUrl = _configWebViewUrl;
+    if (configUrl != null) {
+      return ConfigWebViewScreen(
+        url: configUrl,
+        onExit: _exitConfigWebView,
+      );
     }
 
     final game = _game;
