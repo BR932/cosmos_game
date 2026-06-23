@@ -115,6 +115,7 @@ class _GameShellState extends State<_GameShell> with WidgetsBindingObserver {
   CyberRunnerGame? _game;
   bool _showLoading = true;
   bool _showBonusNotification = false;
+  bool _bonusFlowInProgress = false;
   bool _offlineScreenDismissed = false;
   bool _showOfflineFirstLaunchNoNetwork = false;
   String? _configWebViewUrl;
@@ -271,7 +272,7 @@ class _GameShellState extends State<_GameShell> with WidgetsBindingObserver {
     }
 
     final showPrompt =
-        decision.target == ConfigLaunchTarget.webView &&
+        decision.target != ConfigLaunchTarget.offline &&
         await FirebaseService.instance.shouldShowNotificationPrompt();
 
     if (showPrompt) {
@@ -309,14 +310,32 @@ class _GameShellState extends State<_GameShell> with WidgetsBindingObserver {
   }
 
   Future<void> _onBonusAccepted() async {
-    await FirebaseService.instance.requestNotificationPermission();
-    await ConfigCoordinator.instance.refreshConfigAfterPermission();
-    await _completeBonusFlow();
+    if (_bonusFlowInProgress) {
+      return;
+    }
+
+    _bonusFlowInProgress = true;
+    try {
+      await FirebaseService.instance.requestNotificationPermission();
+      await ConfigCoordinator.instance.refreshConfigAfterPermission();
+      await _completeBonusFlow();
+    } finally {
+      _bonusFlowInProgress = false;
+    }
   }
 
   Future<void> _onBonusSkipped() async {
-    await FirebaseService.instance.recordNotificationPromptSkipped();
-    await _completeBonusFlow();
+    if (_bonusFlowInProgress) {
+      return;
+    }
+
+    _bonusFlowInProgress = true;
+    try {
+      await FirebaseService.instance.recordNotificationPromptSkipped();
+      await _completeBonusFlow();
+    } finally {
+      _bonusFlowInProgress = false;
+    }
   }
 
   Future<String?> _urlWithSiteParams(String? url) {

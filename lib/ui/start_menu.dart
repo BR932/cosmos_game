@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:space_chicken/ui/settings_page.dart';
 import '../audio/game_audio_controller.dart';
 
@@ -31,137 +30,259 @@ class _StartMenuState extends State<StartMenu> {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final contentMaxWidth = math.min(480.0, screenWidth * 0.85);
-    final iconSize = math.max(56.0, contentMaxWidth * 0.22);
     return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.asset(
-            'assets/images/Background_start_menu.jpg',
-            fit: BoxFit.cover,
-          ),
-          const CustomPaint(painter: _StarFieldPainter()),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: LayoutBuilder(
+        builder: (context, viewport) {
+          final isViewportLandscape = viewport.maxWidth > viewport.maxHeight;
+
+          return Stack(
+            fit: StackFit.expand,
             children: [
-              Flexible(
-                child: Image.asset(
-                  'assets/images/Logo_master.png',
-                  width: double.infinity,
-                  fit: BoxFit.contain,
-                ),
+              Image.asset(
+                'assets/images/Background_start_menu.jpg',
+                fit: BoxFit.cover,
               ),
-              Flexible(
-                child: SafeArea(
-                  top: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(maxWidth: contentMaxWidth),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Make only the large cutout scrollable if needed
-                            SingleChildScrollView(
-                              child: GestureDetector(
-                                onTap: () async {
-                                  await GameAudioController.instance
-                                      .playButtonSound();
-                                  await widget.onStart();
-                                },
+              const CustomPaint(painter: _StarFieldPainter()),
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    24,
+                    0,
+                    24,
+                    isViewportLandscape
+                        ? _adaptiveBottomPadding(viewport.maxHeight)
+                        : 0,
+                  ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isLandscape =
+                          constraints.maxWidth > constraints.maxHeight;
+                      final contentMaxWidth = math.min(
+                        480.0,
+                        constraints.maxWidth * 0.88,
+                      );
+                      final controlsHeight = _controlsHeight(
+                        constraints.maxHeight,
+                        isLandscape,
+                      );
+                      final gap = _adaptiveGap(constraints.maxHeight);
+                      final iconSize = _iconSize(
+                        contentMaxWidth,
+                        controlsHeight,
+                        isLandscape,
+                      );
+
+                      if (!isLandscape) {
+                        return _buildPortraitMenu(
+                          constraints: constraints,
+                          contentMaxWidth: contentMaxWidth,
+                          iconSize: iconSize,
+                          gap: gap,
+                        );
+                      }
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: Center(
+                              child: SizedBox.expand(
                                 child: Image.asset(
-                                  'assets/images/Cutout 1.png',
+                                  'assets/images/Logo_master.png',
                                   fit: BoxFit.contain,
+                                  filterQuality: FilterQuality.medium,
                                 ),
                               ),
                             ),
-                            // const SizedBox(height: 14),
-                            // Buttons must remain fixed (not inside scrollable area)
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                GestureDetector(
-                                  onTap: _openSettings,
-                                  child: Image.asset(
-                                    'assets/images/settings.png',
-                                    fit: BoxFit.contain,
-                                    width: iconSize,
-                                    height: iconSize,
-                                  ),
+                          ),
+                          SizedBox(
+                            height: controlsHeight,
+                            child: Center(
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: contentMaxWidth,
                                 ),
-                                const SizedBox(width: 16),
-                                GestureDetector(
-                                  onTap: () async {
-                                    await GameAudioController.instance
-                                        .playButtonSound();
-                                    await SystemNavigator.pop();
-                                  },
-                                  child: Image.asset(
-                                    'assets/images/logout.png',
-                                    fit: BoxFit.contain,
-                                    width: iconSize,
-                                    height: iconSize,
-                                  ),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(
+                                      child: Center(
+                                        child: GestureDetector(
+                                          onTap: () async {
+                                            await GameAudioController.instance
+                                                .playButtonSound();
+                                            await widget.onStart();
+                                          },
+                                          child: Image.asset(
+                                            'assets/images/Cutout 1.png',
+                                            width: contentMaxWidth,
+                                            fit: BoxFit.contain,
+                                            alignment: Alignment.center,
+                                            filterQuality: FilterQuality.medium,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(height: gap),
+                                    SizedBox(
+                                      height: iconSize,
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          _MenuIconButton(
+                                            asset: 'assets/images/settings.png',
+                                            size: iconSize,
+                                            onTap: _openSettings,
+                                          ),
+                                          SizedBox(width: iconSize * 0.16),
+                                          _MenuIconButton(
+                                            asset: 'assets/images/logout.png',
+                                            size: iconSize,
+                                            onTap: () async {
+                                              await GameAudioController.instance
+                                                  .playButtonSound();
+                                              await SystemNavigator.pop();
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ),
-                            // const SizedBox(height: 16),
-                          ],
-                        ),
-                      ),
-                    ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }
-}
 
-class _SettingsSwitch extends StatefulWidget {
-  const _SettingsSwitch({
-    required this.icon,
-    required this.title,
-    required this.value,
-    required this.onChanged,
-  });
+  Widget _buildPortraitMenu({
+    required BoxConstraints constraints,
+    required double contentMaxWidth,
+    required double iconSize,
+    required double gap,
+  }) {
+    final logoSize = math.min(contentMaxWidth, constraints.maxHeight * 0.46);
 
-  final IconData icon;
-  final String title;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  State<_SettingsSwitch> createState() => _SettingsSwitchState();
-}
-
-class _SettingsSwitchState extends State<_SettingsSwitch> {
-  @override
-  Widget build(BuildContext context) {
-    return SwitchListTile(
-      contentPadding: EdgeInsets.zero,
-      secondary: Icon(widget.icon, color: const Color(0xFF00E5FF)),
-      title: Text(
-        widget.title,
-        style: GoogleFonts.moul(
-          color: const Color(0xFFEAFBFF),
-          fontSize: 16,
-          fontWeight: FontWeight.w800,
+    return Center(
+      child: FittedBox(
+        fit: BoxFit.contain,
+        child: SizedBox(
+          width: contentMaxWidth,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset(
+                'assets/images/Logo_master.png',
+                width: logoSize,
+                fit: BoxFit.contain,
+                alignment: Alignment.center,
+                filterQuality: FilterQuality.medium,
+              ),
+              SizedBox(height: gap),
+              GestureDetector(
+                onTap: () async {
+                  await GameAudioController.instance.playButtonSound();
+                  await widget.onStart();
+                },
+                child: Image.asset(
+                  'assets/images/Cutout 1.png',
+                  width: contentMaxWidth,
+                  fit: BoxFit.contain,
+                  alignment: Alignment.center,
+                  filterQuality: FilterQuality.medium,
+                ),
+              ),
+              SizedBox(height: gap),
+              SizedBox(
+                height: iconSize,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _MenuIconButton(
+                      asset: 'assets/images/settings.png',
+                      size: iconSize,
+                      onTap: _openSettings,
+                    ),
+                    SizedBox(width: iconSize * 0.16),
+                    _MenuIconButton(
+                      asset: 'assets/images/logout.png',
+                      size: iconSize,
+                      onTap: () async {
+                        await GameAudioController.instance.playButtonSound();
+                        await SystemNavigator.pop();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-      value: widget.value,
-      activeThumbColor: const Color(0xFFFFF176),
-      activeTrackColor: const Color(0x9900E5FF),
-      inactiveThumbColor: const Color(0xFFBDEFFF),
-      inactiveTrackColor: const Color(0x66071024),
-      onChanged: widget.onChanged,
+    );
+  }
+
+  double _adaptiveBottomPadding(double height) {
+    return math.min(40.0, math.max(10.0, height * 0.055));
+  }
+
+  double _adaptiveGap(double height) {
+    return math.min(16.0, math.max(6.0, height * 0.018));
+  }
+
+  double _controlsHeight(double height, bool isLandscape) {
+    final target = height * (isLandscape ? 0.46 : 0.38);
+    final maxHeight = height * (isLandscape ? 0.62 : 0.48);
+    return math.min(math.max(118.0, target), maxHeight);
+  }
+
+  double _iconSize(
+    double contentMaxWidth,
+    double controlsHeight,
+    bool isLandscape,
+  ) {
+    final widthBased = contentMaxWidth * (isLandscape ? 0.18 : 0.22);
+    final heightBased = controlsHeight * (isLandscape ? 0.34 : 0.36);
+    return math.min(math.max(44.0, widthBased), heightBased);
+  }
+}
+
+class _MenuIconButton extends StatelessWidget {
+  const _MenuIconButton({
+    required this.asset,
+    required this.size,
+    required this.onTap,
+  });
+
+  final String asset;
+  final double size;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox.square(
+        dimension: size,
+        child: Image.asset(
+          asset,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
+        ),
+      ),
     );
   }
 }

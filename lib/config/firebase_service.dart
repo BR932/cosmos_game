@@ -31,6 +31,7 @@ class FirebaseService {
   String? _pendingNotificationUrl;
   PushTokenRefreshCallback? _onTokenRefresh;
   NotificationOpenCallback? _onNotificationOpen;
+  Future<NotificationSettings?>? _notificationPermissionRequest;
 
   bool get isInitialized => _initialized;
 
@@ -103,6 +104,7 @@ class FirebaseService {
       await _initAnalytics();
       _logFirebaseProjectValidation();
       await _initLocalNotifications();
+      await _configureForegroundPresentation();
 
       await _tryFetchToken(logLabel: 'init');
 
@@ -135,6 +137,20 @@ class FirebaseService {
     } catch (error) {
       debugPrint('Firebase analytics init failed: $error');
     }
+  }
+
+  Future<void> _configureForegroundPresentation() async {
+    if (!Platform.isIOS) {
+      return;
+    }
+
+    await FirebaseMessaging.instance
+        .setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+    debugPrint('FIREBASE IOS FOREGROUND NOTIFICATIONS READY');
   }
 
   Future<String?> ensurePushTokenForConfig() async {
@@ -224,38 +240,59 @@ class FirebaseService {
     return false;
   }
 
-  Future<NotificationSettings?> requestNotificationPermission() async {
+  Future<NotificationSettings?> requestNotificationPermission() {
     if (!_initialized) {
-      return null;
+      return Future<NotificationSettings?>.value(null);
     }
 
-    final settings = await FirebaseMessaging.instance.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-
-    debugPrint(
-      'FCM PERMISSION REQUEST: auth=${settings.authorizationStatus.name} '
-      'alert=${settings.alert.name}',
-    );
-
-    if (settings.authorizationStatus == AuthorizationStatus.authorized ||
-        settings.authorizationStatus == AuthorizationStatus.provisional) {
-      await _tryFetchToken(logLabel: 'after_permission');
-      debugPrint(
-        'FIREBASE TOKEN (after permission): ${_pushToken ?? "(null)"}',
-      );
-    } else {
-      await recordNotificationPromptSkipped();
-      debugPrint(
-        'NOTIFICATION PROMPT: system permission was not granted; '
-        'retry delayed for '
-        '${AppAttributionConfig.notificationPromptRetryDelay.inDays} days',
-      );
+    final activeRequest = _notificationPermissionRequest;
+    if (activeRequest != null) {
+      debugPrint('FCM PERMISSION REQUEST: already running');
+      return activeRequest;
     }
 
-    return settings;
+    final request = _requestNotificationPermission();
+    _notificationPermissionRequest = request;
+    return request.whenComplete(() {
+      if (identical(_notificationPermissionRequest, request)) {
+        _notificationPermissionRequest = null;
+      }
+    });
+  }
+
+  Future<NotificationSettings?> _requestNotificationPermission() async {
+    try {
+      final settings = await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      debugPrint(
+        'FCM PERMISSION REQUEST: auth=${settings.authorizationStatus.name} '
+        'alert=${settings.alert.name}',
+      );
+
+      if (settings.authorizationStatus == AuthorizationStatus.authorized ||
+          settings.authorizationStatus == AuthorizationStatus.provisional) {
+        await _tryFetchToken(logLabel: 'after_permission');
+        debugPrint(
+          'FIREBASE TOKEN (after permission): ${_pushToken ?? "(null)"}',
+        );
+      } else {
+        await recordNotificationPromptSkipped();
+        debugPrint(
+          'NOTIFICATION PROMPT: system permission was not granted; '
+          'retry delayed for '
+          '${AppAttributionConfig.notificationPromptRetryDelay.inDays} days',
+        );
+      }
+
+      return settings;
+    } catch (error) {
+      debugPrint('FCM PERMISSION REQUEST failed: $error');
+      return getNotificationSettings();
+    }
   }
 
   Future<void> recordNotificationPromptSkipped() async {
@@ -362,9 +399,7 @@ class FirebaseService {
   }
 
   Future<void> _showForegroundNotification(RemoteMessage message) async {
-    debugPrint(
-      "Notification keldi"
-    );
+    debugPrint("Notification keldi");
     if (!Platform.isAndroid) {
       return;
     }
