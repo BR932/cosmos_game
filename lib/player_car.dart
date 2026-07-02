@@ -23,19 +23,16 @@ class PlayerCar extends SpriteComponent
   int lane;
   double _targetX = 0;
 
-  // 1. Keep a reference to the hitbox
   late final RectangleHitbox _hitbox;
 
-  // 2. Define your relative size ratios as constants
   static const double _hitboxWidthRatio = 0.80;
-  static const double _hitboxHeightRatio = 0.102;
+  static const double _hitboxHeightRatio = 0.70;
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
     _targetX = position.x;
 
-    // 3. Assign the hitbox to the variable so we can resize it later
     _hitbox = RectangleHitbox.relative(
       Vector2(_hitboxWidthRatio, _hitboxHeightRatio),
       parentSize: size,
@@ -58,19 +55,20 @@ class PlayerCar extends SpriteComponent
   }
 
   void applyLayout() {
-    // 4. Update the visual size of the component
     size = game.playerSize;
 
-    // 5. Explicitly update the hitbox size to match the new component size
     if (isLoaded) {
-      _hitbox.size = Vector2(
-        size.x * _hitboxWidthRatio,
-        size.y * _hitboxHeightRatio,
-      );
+      _syncHitboxLayout();
     }
 
     position.y = game.lanes.playerStartPosition(lane).y;
     _targetX = game.lanes.laneCenterX(lane);
     position.x = _targetX;
+  }
+
+  void _syncHitboxLayout() {
+    _hitbox
+      ..size = Vector2(size.x * _hitboxWidthRatio, size.y * _hitboxHeightRatio)
+      ..position = size / 2;
   }
 }

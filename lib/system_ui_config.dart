@@ -34,6 +34,16 @@ Future<void> configureWebViewSystemUi() async {
   );
 }
 
+Future<void> trimWebViewStorage({bool clearPersistentData = false}) async {
+  try {
+    await _systemUiChannel.invokeMethod<void>('trimWebViewStorage', {
+      'clearPersistentData': clearPersistentData,
+    });
+  } on MissingPluginException {
+    // iOS and platforms without the Android bridge rely on WebViewController cleanup.
+  }
+}
+
 Future<void> _setDecorFitsSystemWindows(bool decorFits) async {
   try {
     await _systemUiChannel.invokeMethod<void>(

@@ -174,6 +174,7 @@ class GameAudioController {
       case AppLifecycleState.resumed:
         unawaited(resumeMusic());
       case AppLifecycleState.inactive:
+        break;
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
         unawaited(pauseMusic());

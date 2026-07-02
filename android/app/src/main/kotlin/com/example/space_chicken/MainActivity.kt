@@ -12,9 +12,12 @@ import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.webkit.CookieManager
+import android.webkit.WebStorage
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 
 class MainActivity : FlutterActivity() {
     private val vibrationChannel = "space_chicken/vibration"
@@ -116,6 +119,11 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(true)
                 }
+                "trimWebViewStorage" -> {
+                    val clearPersistentData = call.argument<Boolean>("clearPersistentData") ?: false
+                    trimWebViewStorage(clearPersistentData)
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -209,6 +217,79 @@ class MainActivity : FlutterActivity() {
         } else {
             @Suppress("DEPRECATION")
             getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
+    }
+
+    private fun trimWebViewStorage(clearPersistentData: Boolean) {
+        if (clearPersistentData) {
+            try {
+                CookieManager.getInstance().removeAllCookies(null)
+                CookieManager.getInstance().flush()
+            } catch (_: Exception) {
+            }
+
+            try {
+                WebStorage.getInstance().deleteAllData()
+            } catch (_: Exception) {
+            }
+        }
+
+        val dataRoot = File(applicationInfo.dataDir)
+        val cacheRoot = cacheDir
+
+        val cacheDataPaths = listOf(
+            "app_webview/Default/Cache",
+            "app_webview/Default/Code Cache",
+            "app_webview/Default/GPUCache",
+            "app_webview/Default/Service Worker/CacheStorage",
+            "app_webview/Default/Service Worker/ScriptCache",
+            "app_webview/Default/blob_storage",
+            "app_webview/BrowserMetrics",
+            "app_webview/Crashpad"
+        )
+
+        val persistentDataPaths = listOf(
+            "app_webview/Default/File System",
+            "app_webview/Default/IndexedDB",
+            "app_webview/Default/Local Storage",
+            "app_webview/Default/Session Storage"
+        )
+
+        val cachePaths = listOf(
+            "WebView",
+            "webview",
+            "org.chromium.android_webview",
+            "com.android.webview",
+            "com.google.android.webview"
+        )
+
+        cacheDataPaths.forEach { relativePath ->
+            deleteIfInsideRoot(dataRoot, File(dataRoot, relativePath))
+        }
+        if (clearPersistentData) {
+            persistentDataPaths.forEach { relativePath ->
+                deleteIfInsideRoot(dataRoot, File(dataRoot, relativePath))
+            }
+        }
+        cachePaths.forEach { relativePath ->
+            deleteIfInsideRoot(cacheRoot, File(cacheRoot, relativePath))
+        }
+    }
+
+    private fun deleteIfInsideRoot(root: File, target: File) {
+        try {
+            val rootPath = root.canonicalFile.path
+            val targetFile = target.canonicalFile
+            val targetPath = targetFile.path
+
+            if (targetPath != rootPath && !targetPath.startsWith("$rootPath${File.separator}")) {
+                return
+            }
+
+            if (targetFile.exists()) {
+                targetFile.deleteRecursively()
+            }
+        } catch (_: Exception) {
         }
     }
 

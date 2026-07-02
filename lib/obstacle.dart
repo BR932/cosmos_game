@@ -13,7 +13,7 @@ class Obstacle extends SpriteComponent
   // Если отрицательное (-10, -15, -20, -35) — это препятствие.
   final int scoreChange;
 
-  // Если true — столкновение сразу завершает игру (obstacles_1, obstacles_3).
+  // Если true — столкновение сразу завершает игру. Любой отрицательный scoreChange тоже завершает забег.
   final bool endsRunOnCollision;
 
   Obstacle({
@@ -89,7 +89,7 @@ class Obstacle extends SpriteComponent
       // Если поймали яйцо -> передастся плюс и очки увеличатся.
       game.modifyScore(scoreChange);
 
-      if (endsRunOnCollision) {
+      if (endsRunOnCollision || scoreChange < 0) {
         game.endRun();
       }
 
