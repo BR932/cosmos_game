@@ -28,6 +28,7 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
     with WidgetsBindingObserver {
   WebViewController? _controller;
   bool _isLoading = true;
+  bool _isHandlingBack = false;
 
   @override
   void initState() {
@@ -107,7 +108,18 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
 
     controller.setNavigationDelegate(
       NavigationDelegate(
-        onPageStarted: (_) {
+        onPageStarted: (url) async {
+          if (!mounted) return;
+
+          // Inject before page JS runs to block Protected Media ID
+          // requests that trigger unwanted Android system popups.
+          try {
+            await controller.runJavaScript(
+              'try { navigator.requestMediaKeySystemAccess = function() { '
+              'return Promise.reject("blocked"); }; } catch(_) {}',
+            );
+          } catch (_) {}
+
           if (!mounted) return;
 
           setState(() {
@@ -159,12 +171,19 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
     if (Platform.isAndroid && controller.platform is AndroidWebViewController) {
       final androidController = controller.platform as AndroidWebViewController;
 
-      await androidController.setMediaPlaybackRequiresUserGesture(false);
+      // Require user gesture for media playback (including EME/DRM).
+      // This prevents Protected Media ID from auto-requesting on page load,
+      // which would otherwise trigger the Android system popup.
+      await androidController.setMediaPlaybackRequiresUserGesture(true);
 
       await androidController.setOnShowFileSelector(_androidFilePicker);
 
-      await androidController.setOnPlatformPermissionRequest((request) {
-        request.grant();
+      // Deny ALL permission requests synchronously to prevent the system
+      // popup "Automatic resolution of requests to Protected Media ID"
+      // from appearing. The only permissions we would grant are camera
+      // and microphone, but the synchronous deny prevents the dialog.
+      androidController.setOnPlatformPermissionRequest((request) {
+        request.deny();
       });
     }
 
@@ -223,13 +242,16 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
             'html, body {',
             '  width: 100%;',
             '  max-width: 100%;',
-            '  min-height: var(--app-visible-height);',
             '  overflow-x: hidden !important;',
             '  -webkit-text-size-adjust: 100%;',
+            '}',
+            'html {',
+            '  min-height: var(--app-visible-height);',
             '}',
             'body {',
             '  margin-left: auto;',
             '  margin-right: auto;',
+            '  min-height: var(--app-visible-height);',
             '}',
             'img, video, canvas, svg, iframe {',
             '  max-width: 100%;',
@@ -254,23 +276,49 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
             'body.app-webview-keyboard-open {',
             '  padding-bottom: max(160px, calc(var(--app-keyboard-inset) + 24px)) !important;',
             '}',
-            'body.app-webview-landscape {',
-            '  min-height: var(--app-visible-height) !important;',
-            '  padding-bottom: max(32px, env(safe-area-inset-bottom)) !important;',
-            '}',
-            'html.app-webview-landscape-keyboard-open,',
-            'html.app-webview-landscape-keyboard-open body {',
-            '  height: var(--app-visible-height) !important;',
-            '  max-height: var(--app-visible-height) !important;',
-            '  overflow: hidden !important;',
-            '}',
-            'html.app-webview-landscape-keyboard-open body {',
-            '  display: block !important;',
+            '/* Landscape: remove all height constraints so the page can scroll */',
+            'html.app-webview-landscape,',
+            'html.app-webview-landscape body {',
+            '  height: auto !important;',
+            '  min-height: unset !important;',
             '  overflow-x: hidden !important;',
             '  overflow-y: auto !important;',
-            '  overscroll-behavior-y: contain;',
             '  -webkit-overflow-scrolling: touch;',
+            '}',
+            'html.app-webview-landscape body {',
+            '  padding-bottom: max(32px, env(safe-area-inset-bottom)) !important;',
+            '  overscroll-behavior-y: contain;',
+            '}',
+            'html.app-webview-landscape > div,',
+            'html.app-webview-landscape > main,',
+            'html.app-webview-landscape #root,',
+            'html.app-webview-landscape #app,',
+            'html.app-webview-landscape #__next,',
+            'html.app-webview-landscape [data-reactroot] {',
+            '  height: auto !important;',
+            '  max-height: none !important;',
+            '  overflow: visible !important;',
+            '}',
+            'html.app-webview-landscape form,',
+            'html.app-webview-landscape [class*="form" i],',
+            'html.app-webview-landscape [id*="form" i],',
+            'html.app-webview-landscape [class*="registration" i],',
+            'html.app-webview-landscape [id*="registration" i],',
+            'html.app-webview-landscape [class*="signup" i],',
+            'html.app-webview-landscape [id*="signup" i],',
+            'html.app-webview-landscape [class*="login" i],',
+            'html.app-webview-landscape [id*="login" i] {',
+            '  height: auto !important;',
+            '  max-height: none !important;',
+            '  overflow: visible !important;',
+            '  position: relative !important;',
+            '  transform: none !important;',
+            '}',
+            '/* Landscape + keyboard: extra bottom padding so content is visible above keyboard */',
+            'html.app-webview-landscape-keyboard-open body {',
             '  padding-bottom: max(180px, calc(var(--app-keyboard-inset) + 32px)) !important;',
+            '  display: block !important;',
+            '  overscroll-behavior-y: contain;',
             '}',
             '@media (orientation: landscape) and (max-height: 620px) {',
             '  html, body {',
@@ -297,13 +345,39 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
             '  }',
             '  [style*="height: 100vh"],',
             '  [style*="height:100vh"],',
+            '  [style*="height: 100dvh"],',
+            '  [style*="height:100dvh"],',
+            '  [style*="height: 100svh"],',
+            '  [style*="height:100svh"],',
+            '  [style*="height: 100%"],',
+            '  [style*="height:100%"],',
             '  [style*="min-height: 100vh"],',
             '  [style*="min-height:100vh"],',
+            '  [style*="min-height: 100dvh"],',
+            '  [style*="min-height:100dvh"],',
+            '  [style*="min-height: 100svh"],',
+            '  [style*="min-height:100svh"],',
+            '  [style*="min-height: 100%"],',
+            '  [style*="min-height:100%"],',
             '  [style*="max-height: 100vh"],',
-            '  [style*="max-height:100vh"] {',
+            '  [style*="max-height:100vh"],',
+            '  [style*="max-height: 100dvh"],',
+            '  [style*="max-height:100dvh"],',
+            '  [style*="max-height: 100svh"],',
+            '  [style*="max-height:100svh"],',
+            '  [style*="max-height: 100%"],',
+            '  [style*="max-height:100%"] {',
             '    height: auto !important;',
             '    min-height: var(--app-visible-height) !important;',
             '    max-height: none !important;',
+            '  }',
+            '  html.app-webview-landscape-keyboard-open [style*="position: fixed"],',
+            '  html.app-webview-landscape-keyboard-open [style*="position:fixed"],',
+            '  html.app-webview-landscape-keyboard-open [class*="modal" i],',
+            '  html.app-webview-landscape-keyboard-open [id*="modal" i] {',
+            '    max-height: none !important;',
+            '    overflow-y: auto !important;',
+            '    -webkit-overflow-scrolling: touch;',
             '  }',
             '  html.app-webview-landscape-keyboard-open body > *,',
             '  html.app-webview-landscape-keyboard-open form,',
@@ -348,7 +422,73 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
             keepFocusedFieldVisible(event);
           }
 
-          function keepOfferFormVisible() {
+          function updateTrackedHistoryDepth(nextDepth) {
+            window.__appWebViewHistoryDepth = Math.max(0, Number(nextDepth) || 0);
+          }
+
+          function installWebViewBackHandler() {
+            if (window.__appWebViewBackHandlerInstalled) {
+              return;
+            }
+
+            window.__appWebViewBackHandlerInstalled = true;
+            window.__appWebViewHistoryDepth = 0;
+
+            var originalPushState = window.history && window.history.pushState;
+            var originalReplaceState = window.history && window.history.replaceState;
+
+            if (typeof originalPushState === 'function') {
+              window.history.pushState = function () {
+                var result = originalPushState.apply(this, arguments);
+                updateTrackedHistoryDepth(window.__appWebViewHistoryDepth + 1);
+                return result;
+              };
+            }
+
+            if (typeof originalReplaceState === 'function') {
+              window.history.replaceState = function () {
+                return originalReplaceState.apply(this, arguments);
+              };
+            }
+
+            window.addEventListener('popstate', function () {
+              if (window.__appWebViewBackInProgress) {
+                updateTrackedHistoryDepth(window.__appWebViewHistoryDepth - 1);
+              }
+            });
+
+            window.addEventListener('hashchange', function (event) {
+              if (window.__appWebViewBackInProgress) {
+                updateTrackedHistoryDepth(window.__appWebViewHistoryDepth - 1);
+              } else if (event.oldURL !== event.newURL) {
+                updateTrackedHistoryDepth(window.__appWebViewHistoryDepth + 1);
+              }
+            });
+          }
+
+          function trimBrowserCacheStorage() {
+            try {
+              if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+                navigator.serviceWorker.getRegistrations().then(function (registrations) {
+                  registrations.forEach(function (registration) {
+                    registration.unregister();
+                  });
+                }).catch(function () {});
+              }
+            } catch (_) {}
+
+            try {
+              if (window.caches && window.caches.keys) {
+                window.caches.keys().then(function (keys) {
+                  keys.forEach(function (key) {
+                    window.caches.delete(key);
+                  });
+                }).catch(function () {});
+              }
+            } catch (_) {}
+          }
+
+          function keepOfferFormVisible(preferStart) {
             var target = focusedField() || document.querySelector(
               'form, input, select, textarea, [class*="form" i], [id*="form" i], [class*="registration" i], [id*="registration" i], [class*="signup" i], [id*="signup" i], [class*="login" i], [id*="login" i]'
             );
@@ -360,7 +500,7 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
               try {
                 target.scrollIntoView({
                   behavior: 'smooth',
-                  block: 'center',
+                  block: preferStart ? 'start' : 'center',
                   inline: 'nearest'
                 });
               } catch (_) {
@@ -392,6 +532,7 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
             root.style.setProperty('--app-keyboard-inset', Math.ceil(keyboardInset) + 'px');
             root.style.setProperty('--app-visible-height', Math.ceil(Math.max(1, visualHeight)) + 'px');
             root.classList.toggle('app-webview-landscape-keyboard-open', isLandscape && keyboardOpen);
+            root.classList.toggle('app-webview-landscape', isLandscape);
             document.body.classList.toggle('app-webview-narrow', isNarrow);
             document.body.classList.toggle('app-webview-landscape', isLandscape);
             document.body.classList.toggle('app-webview-keyboard-open', keyboardOpen);
@@ -403,7 +544,7 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
               }, 260);
               window.__appKeyboardRevealPending = false;
             } else if (isLandscape) {
-              keepOfferFormVisible();
+              keepOfferFormVisible(true);
             }
 
             window.__appKeyboardWasOpen = keyboardOpen;
@@ -412,6 +553,23 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
           window.__appWebViewSetKeyboardInset = function (inset) {
             window.__appWebViewKeyboardInset = Number(inset) || 0;
             updateViewportState(window.__appWebViewKeyboardInset);
+          };
+
+          window.__appWebViewGoBackInPage = function () {
+            if (!window.history || window.__appWebViewHistoryDepth <= 0) {
+              return false;
+            }
+
+            if (window.__appWebViewBackInProgress) {
+              return true;
+            }
+
+            window.__appWebViewBackInProgress = true;
+            window.history.back();
+            setTimeout(function () {
+              window.__appWebViewBackInProgress = false;
+            }, 700);
+            return true;
           };
 
           if (!window.__appWebViewLandscapeFormFixInstalled) {
@@ -435,7 +593,16 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
             });
           }
 
+          installWebViewBackHandler();
+          trimBrowserCacheStorage();
           updateViewportState();
+
+          /* Block Protected Media ID requests that trigger unwanted system popups */
+          try {
+            navigator.requestMediaKeySystemAccess = function() {
+              return Promise.reject('blocked');
+            };
+          } catch(_) {}
         })();
       ''');
     } catch (error) {
@@ -473,6 +640,38 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
     await ExternalLinkLauncher.open(uri.toString());
   }
 
+  Future<void> _handleAndroidPermissionRequest(
+    PlatformWebViewPermissionRequest request,
+  ) async {
+    final requestedTypes = request.types;
+    final hasProtectedMediaId = requestedTypes.contains(
+      AndroidWebViewPermissionResourceType.protectedMediaId,
+    );
+    final allowedTypes = <WebViewPermissionResourceType>{
+      WebViewPermissionResourceType.camera,
+      WebViewPermissionResourceType.microphone,
+    };
+    final hasOnlyAllowedTypes = requestedTypes.every(allowedTypes.contains);
+
+    try {
+      if (hasProtectedMediaId || !hasOnlyAllowedTypes) {
+        debugPrint(
+          'WEBVIEW PERMISSION denied: '
+          '${requestedTypes.map((type) => type.name).join(', ')}',
+        );
+        await request.deny();
+        return;
+      }
+
+      await request.grant();
+    } catch (error) {
+      debugPrint('WEBVIEW PERMISSION handling failed: $error');
+      try {
+        await request.deny();
+      } catch (_) {}
+    }
+  }
+
   Future<List<String>> _androidFilePicker(FileSelectorParams params) async {
     try {
       final groups = _acceptedTypeGroupsFor(params);
@@ -508,15 +707,48 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
   }
 
   Future<void> _handleBack() async {
-    final controller = _controller;
+    if (_isHandlingBack) {
+      return;
+    }
 
-    if (controller != null && await controller.canGoBack()) {
-      await controller.goBack();
+    final controller = _controller;
+    if (controller == null) {
+      return;
+    }
+
+    _isHandlingBack = true;
+    try {
+      if (await _goBackInPage(controller)) {
+        return;
+      }
+
+      if (await controller.canGoBack()) {
+        await controller.goBack();
+        return;
+      }
+    } finally {
+      _isHandlingBack = false;
+    }
+  }
+
+  Future<bool> _goBackInPage(WebViewController controller) async {
+    try {
+      final result = await controller.runJavaScriptReturningResult(r'''
+        Boolean(window.__appWebViewGoBackInPage && window.__appWebViewGoBackInPage());
+      ''');
+
+      return result == true || result.toString() == 'true';
+    } catch (error) {
+      debugPrint('WEBVIEW PAGE BACK failed: $error');
+      return false;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final isLandscape = mediaQuery.orientation == Orientation.landscape;
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
@@ -531,32 +763,55 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
           child: LayoutBuilder(
             builder: (context, constraints) {
               final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-              final viewportHeight = math.max(1.0, constraints.maxHeight);
-              final isLandscape = constraints.maxWidth > constraints.maxHeight;
+              final effectiveKeyboardInset = math.min(
+                keyboardInset,
+                math.max(0.0, constraints.maxHeight - 1),
+              );
 
-              return ListView(
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                physics: isLandscape
-                    ? const NeverScrollableScrollPhysics()
-                    : const ClampingScrollPhysics(),
-                padding: EdgeInsets.only(
-                  bottom: isLandscape ? 0 : keyboardInset,
-                ),
-                children: [
-                  SizedBox(
-                    height: viewportHeight,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        if (_controller != null)
-                          WebViewWidget(controller: _controller!),
-                        if (_isLoading)
-                          const Center(child: CircularProgressIndicator()),
-                      ],
-                    ),
+              // In portrait: shrink viewport by keyboard inset so that
+              // the WebView sits above the keyboard (standard behavior).
+              // In landscape: keep full height — the keyboard naturally
+              // overlaps the WebView. The injected JS CSS (overflow-y: auto,
+              // scroll-margin on inputs) already scrolls focused fields
+              // into the visible area so users can see all form controls.
+              if (isLandscape) {
+                return SizedBox(
+                  width: constraints.maxWidth,
+                  height: constraints.maxHeight,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (_controller != null)
+                        WebViewWidget(controller: _controller!),
+                      if (_isLoading)
+                        const Center(child: CircularProgressIndicator()),
+                    ],
                   ),
-                ],
+                );
+              }
+
+              final viewportHeight = math.max(
+                1.0,
+                constraints.maxHeight - effectiveKeyboardInset,
+              );
+
+              return AnimatedPadding(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                padding: EdgeInsets.only(bottom: effectiveKeyboardInset),
+                child: SizedBox(
+                  width: constraints.maxWidth,
+                  height: viewportHeight,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (_controller != null)
+                        WebViewWidget(controller: _controller!),
+                      if (_isLoading)
+                        const Center(child: CircularProgressIndicator()),
+                    ],
+                  ),
+                ),
               );
             },
           ),

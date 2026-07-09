@@ -101,9 +101,11 @@ class _SupportScreenState extends State<SupportScreen>
             'html, body {',
             '  width: 100%;',
             '  max-width: 100%;',
-            '  min-height: var(--app-visible-height);',
             '  overflow-x: hidden !important;',
             '  -webkit-text-size-adjust: 100%;',
+            '}',
+            'html {',
+            '  min-height: var(--app-visible-height);',
             '}',
             'body {',
             '  box-sizing: border-box;',
@@ -133,36 +135,38 @@ class _SupportScreenState extends State<SupportScreen>
             '  display: block;',
             '  padding-bottom: max(160px, calc(var(--app-keyboard-inset) + 24px)) !important;',
             '}',
-            'html.app-webview-landscape-keyboard-open,',
-            'html.app-webview-landscape-keyboard-open body {',
-            '  height: var(--app-visible-height) !important;',
-            '  max-height: var(--app-visible-height) !important;',
-            '  overflow: hidden !important;',
-            '}',
-            'html.app-webview-landscape-keyboard-open body {',
-            '  display: block !important;',
+            '/* Landscape: remove all height constraints so the page can scroll */',
+            'html.app-webview-landscape,',
+            'html.app-webview-landscape body {',
+            '  height: auto !important;',
+            '  min-height: unset !important;',
             '  overflow-x: hidden !important;',
             '  overflow-y: auto !important;',
-            '  overscroll-behavior-y: contain;',
             '  -webkit-overflow-scrolling: touch;',
-            '  padding-bottom: max(180px, calc(var(--app-keyboard-inset) + 32px)) !important;',
             '}',
-            '@media (orientation: landscape), (max-height: 620px) {',
-            '  body {',
-            '    display: block;',
-            '    min-height: var(--app-visible-height);',
-            '  }',
-            '  .support-container, form, main, [role="main"] {',
-            '    max-height: none !important;',
-            '    overflow: visible !important;',
-            '  }',
-            '  html.app-webview-landscape-keyboard-open body > *,',
-            '  html.app-webview-landscape-keyboard-open form,',
-            '  html.app-webview-landscape-keyboard-open main,',
-            '  html.app-webview-landscape-keyboard-open [role="main"] {',
-            '    position: relative !important;',
-            '    transform: none !important;',
-            '  }',
+            'html.app-webview-landscape body {',
+            '  display: block;',
+            '  padding-bottom: max(32px, env(safe-area-inset-bottom)) !important;',
+            '  overscroll-behavior-y: contain;',
+            '}',
+            'html.app-webview-landscape .support-container,',
+            'html.app-webview-landscape form,',
+            'html.app-webview-landscape main,',
+            'html.app-webview-landscape [role="main"] {',
+            '  max-height: none !important;',
+            '  overflow: visible !important;',
+            '}',
+            '/* Landscape + keyboard: extra bottom padding so content is visible above keyboard */',
+            'html.app-webview-landscape-keyboard-open body {',
+            '  padding-bottom: max(180px, calc(var(--app-keyboard-inset) + 32px)) !important;',
+            '  overscroll-behavior-y: contain;',
+            '}',
+            'html.app-webview-landscape-keyboard-open body > *,',
+            'html.app-webview-landscape-keyboard-open form,',
+            'html.app-webview-landscape-keyboard-open main,',
+            'html.app-webview-landscape-keyboard-open [role="main"] {',
+            '  position: relative !important;',
+            '  transform: none !important;',
             '}'
           ].join('\\n');
 
@@ -305,6 +309,9 @@ class _SupportScreenState extends State<SupportScreen>
 
   @override
   Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final isLandscape = mediaQuery.orientation == Orientation.landscape;
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: _handleSystemBack,
@@ -315,42 +322,75 @@ class _SupportScreenState extends State<SupportScreen>
           child: LayoutBuilder(
             builder: (context, constraints) {
               final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-              final viewportHeight = math.max(1.0, constraints.maxHeight);
-              final isLandscape = constraints.maxWidth > constraints.maxHeight;
+              final effectiveKeyboardInset = math.min(
+                keyboardInset,
+                math.max(0.0, constraints.maxHeight - 1),
+              );
 
-              return ListView(
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                physics: isLandscape
-                    ? const NeverScrollableScrollPhysics()
-                    : const ClampingScrollPhysics(),
-                padding: EdgeInsets.only(
-                  bottom: isLandscape ? 0 : keyboardInset,
-                ),
-                children: [
-                  SizedBox(
-                    height: viewportHeight,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        WebViewWidget(controller: _controller),
-                        Positioned(
-                          left: 12,
-                          top: 12,
-                          child: _SupportBackButton(onTap: _handleBack),
-                        ),
-                        if (_isLoading)
-                          const Center(
-                            child: CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Color(0xFF00E5FF),
-                              ),
+              // In portrait: shrink viewport by keyboard inset so that
+              // the WebView sits above the keyboard (standard behavior).
+              // In landscape: keep full height — the keyboard naturally
+              // overlaps the WebView. The injected JS CSS (overflow-y: auto,
+              // scroll-margin on inputs) already scrolls focused fields
+              // into the visible area so users can see all form controls.
+              if (isLandscape) {
+                return SizedBox(
+                  width: constraints.maxWidth,
+                  height: constraints.maxHeight,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      WebViewWidget(controller: _controller),
+                      Positioned(
+                        left: 12,
+                        top: 12,
+                        child: _SupportBackButton(onTap: _handleBack),
+                      ),
+                      if (_isLoading)
+                        const Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Color(0xFF00E5FF),
                             ),
                           ),
-                      ],
-                    ),
+                        ),
+                    ],
                   ),
-                ],
+                );
+              }
+
+              final viewportHeight = math.max(
+                1.0,
+                constraints.maxHeight - effectiveKeyboardInset,
+              );
+
+              return AnimatedPadding(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                padding: EdgeInsets.only(bottom: effectiveKeyboardInset),
+                child: SizedBox(
+                  width: constraints.maxWidth,
+                  height: viewportHeight,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      WebViewWidget(controller: _controller),
+                      Positioned(
+                        left: 12,
+                        top: 12,
+                        child: _SupportBackButton(onTap: _handleBack),
+                      ),
+                      if (_isLoading)
+                        const Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Color(0xFF00E5FF),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               );
             },
           ),

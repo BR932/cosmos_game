@@ -3,6 +3,7 @@ package com.space_chicken
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -13,6 +14,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.webkit.CookieManager
+import android.webkit.WebViewDatabase
 import android.webkit.WebStorage
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -30,12 +32,27 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        trimAppStorage(clearPersistentWebViewData = true)
         createNotificationChannel()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
+            trimAppStorage(clearPersistentWebViewData = true)
+        } else if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            trimAppStorage(clearPersistentWebViewData = false)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+    }
+
+    override fun onStop() {
+        trimAppStorage(clearPersistentWebViewData = true)
+        super.onStop()
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -121,7 +138,7 @@ class MainActivity : FlutterActivity() {
                 }
                 "trimWebViewStorage" -> {
                     val clearPersistentData = call.argument<Boolean>("clearPersistentData") ?: false
-                    trimWebViewStorage(clearPersistentData)
+                    trimAppStorage(clearPersistentData)
                     result.success(true)
                 }
                 else -> result.notImplemented()
@@ -220,8 +237,19 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun trimWebViewStorage(clearPersistentData: Boolean) {
-        if (clearPersistentData) {
+    private fun trimAppStorage(clearPersistentWebViewData: Boolean) {
+        trimTransientAppCache()
+        trimWebViewStorage(clearPersistentWebViewData)
+    }
+
+    private fun trimTransientAppCache() {
+        deleteDirectoryContents(cacheDir)
+        deleteDirectoryContents(codeCacheDir)
+        externalCacheDir?.let { deleteDirectoryContents(it) }
+    }
+
+    private fun trimWebViewStorage(clearPersistentWebViewData: Boolean) {
+        if (clearPersistentWebViewData) {
             try {
                 CookieManager.getInstance().removeAllCookies(null)
                 CookieManager.getInstance().flush()
@@ -232,15 +260,27 @@ class MainActivity : FlutterActivity() {
                 WebStorage.getInstance().deleteAllData()
             } catch (_: Exception) {
             }
+
+            try {
+                WebViewDatabase.getInstance(this).clearHttpAuthUsernamePassword()
+                WebViewDatabase.getInstance(this).clearFormData()
+            } catch (_: Exception) {
+            }
         }
 
         val dataRoot = File(applicationInfo.dataDir)
         val cacheRoot = cacheDir
+        val codeCacheRoot = codeCacheDir
 
         val cacheDataPaths = listOf(
             "app_webview/Default/Cache",
             "app_webview/Default/Code Cache",
             "app_webview/Default/GPUCache",
+            "app_webview/Default/DawnGraphiteCache",
+            "app_webview/Default/DawnWebGPUCache",
+            "app_webview/Default/GrShaderCache",
+            "app_webview/Default/ShaderCache",
+            "app_webview/Default/Shared Dictionary/cache",
             "app_webview/Default/Service Worker/CacheStorage",
             "app_webview/Default/Service Worker/ScriptCache",
             "app_webview/Default/blob_storage",
@@ -252,7 +292,17 @@ class MainActivity : FlutterActivity() {
             "app_webview/Default/File System",
             "app_webview/Default/IndexedDB",
             "app_webview/Default/Local Storage",
-            "app_webview/Default/Session Storage"
+            "app_webview/Default/Session Storage",
+            "app_webview/Default/Service Worker",
+            "app_webview/Default/Shared Dictionary",
+            "app_webview/Default/WebStorage",
+            "app_webview/Default/databases",
+            "app_webview/Default/QuotaManager",
+            "app_webview/Default/QuotaManager-journal",
+            "app_webview/Default/Network Persistent State",
+            "app_webview/Default/Trust Tokens",
+            "app_webview/Default/Cookies",
+            "app_webview/Default/Cookies-journal"
         )
 
         val cachePaths = listOf(
@@ -266,13 +316,54 @@ class MainActivity : FlutterActivity() {
         cacheDataPaths.forEach { relativePath ->
             deleteIfInsideRoot(dataRoot, File(dataRoot, relativePath))
         }
-        if (clearPersistentData) {
+        if (clearPersistentWebViewData) {
             persistentDataPaths.forEach { relativePath ->
                 deleteIfInsideRoot(dataRoot, File(dataRoot, relativePath))
             }
         }
         cachePaths.forEach { relativePath ->
             deleteIfInsideRoot(cacheRoot, File(cacheRoot, relativePath))
+        }
+        deleteDirectoryContents(codeCacheRoot)
+        externalCacheDir?.let { deleteDirectoryContents(it) }
+        pruneWebViewCacheDirectories(File(dataRoot, "app_webview"))
+    }
+
+    private fun pruneWebViewCacheDirectories(root: File) {
+        if (!root.exists()) {
+            return
+        }
+
+        val cacheDirectoryNames = setOf(
+            "Cache",
+            "Code Cache",
+            "GPUCache",
+            "DawnGraphiteCache",
+            "DawnWebGPUCache",
+            "GrShaderCache",
+            "ShaderCache",
+            "CacheStorage",
+            "ScriptCache",
+            "blob_storage",
+            "BrowserMetrics",
+            "Crashpad"
+        )
+
+        val directoriesToDelete = root.walkTopDown()
+            .maxDepth(6)
+            .filter { it.isDirectory && it.name in cacheDirectoryNames }
+            .toList()
+
+        directoriesToDelete.forEach { deleteIfInsideRoot(root, it) }
+    }
+
+    private fun deleteDirectoryContents(root: File?) {
+        if (root == null || !root.exists() || !root.isDirectory) {
+            return
+        }
+
+        root.listFiles()?.forEach { child ->
+            deleteIfInsideRoot(root, child)
         }
     }
 
