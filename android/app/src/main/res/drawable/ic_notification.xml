@@ -1,11 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Notification small icon (status-bar / collapsed icon) for the app.
+    Derived from assets/icons/Vector.svg (flame). Android tints the status-bar
+    small icon to a flat white silhouette using only the alpha channel, so this
+    is a single white shape. Centered in a square viewport with padding.
+    Referenced by the Flutter local notifications ('ic_notification') and the FCM
+    SDK (com.google.firebase.messaging.default_notification_icon meta-data).
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="30dp"
-    android:height="37dp"
-    android:viewportWidth="30"
-    android:viewportHeight="37">
-    <path
-        android:fillColor="#FFFFFF"
-        android:fillType="evenOdd"
-        android:pathData="M24.4,9.792C26.6,12.672 29.4,16.1279 29.8,21.5039C29.8,21.5039 30,22.6559 30,23.0399C30,30.5279 23.4,36.8639 15,36.8639C6.8,36.8639 0,30.7199 0,23.0399V22.0799C0.2,14.2079 4.4,12.096 4.6,12.096C4.8,11.904 5.2,11.904 5.4,12.096C5.6,12.288 5.8,12.48 5.8,12.672C5.8,12.864 6.6,17.4719 10,18.2399C10,16.1279 10,13.056 10.8,10.56C12,6.528 15,2.496 18.6,0.192C18.8,0 19.2,0 19.6,0C19.8,0.192 20,0.384 20,0.768C20,4.416 22,6.912 24.2,9.6C24.4,9.6 24.4,9.6 24.4,9.792ZM9,29.1839C9.8,32.6399 12.2,35.3279 16.4,34.3679C22.4,33.0239 22,26.3039 19.6,22.6559C17.2,18.8159 17,15.7439 17,14.7839C15.6,16.5119 13.2,20.9279 13.8,23.8079C14.4,26.1119 12.4,26.6879 10.6,23.2319C9.8,23.6159 8.4,26.4959 9,29.1839Z" />
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="45"
+    android:viewportHeight="45">
+    <group android:translateX="7.5" android:translateY="4">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M24.4,9.792C26.6,12.672 29.4,16.1279 29.8,21.5039C29.8,21.5039 30,22.6559 30,23.0399C30,30.5279 23.4,36.8639 15,36.8639C6.8,36.8639 0,30.7199 0,23.0399V22.0799C0.2,14.2079 4.4,12.096 4.6,12.096C4.8,11.904 5.2,11.904 5.4,12.096C5.6,12.288 5.8,12.48 5.8,12.672C5.8,12.864 6.6,17.4719 10,18.2399C10,16.1279 10,13.056 10.8,10.56C12,6.528 15,2.496 18.6,0.192C18.8,0 19.2,0 19.6,0C19.8,0.192 20,0.384 20,0.768C20,4.416 22,6.912 24.2,9.6C24.4,9.6 24.4,9.6 24.4,9.792ZM9,29.1839C9.8,32.6399 12.2,35.3279 16.4,34.3679C22.4,33.0239 22,26.3039 19.6,22.6559C17.2,18.8159 17,15.7439 17,14.7839C15.6,16.5119 13.2,20.9279 13.8,23.8079C14.4,26.1119 12.4,26.6879 10.6,23.2319C9.8,23.6159 8.4,26.4959 9,29.1839Z" />
+    </group>
 </vector>

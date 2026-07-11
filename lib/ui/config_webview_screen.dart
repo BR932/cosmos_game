@@ -509,7 +509,10 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
             }, 180);
           }
 
-          function updateViewportState(forcedInset) {
+          function updateViewportState(forcedInset, allowReveal) {
+            // allowReveal is false for pure scroll events so the user's
+            // scroll position is never yanked back to a field/form.
+            var reveal = allowReveal !== false;
             var visualViewport = window.visualViewport;
             var layoutHeight = Math.max(root.clientHeight || 0, window.innerHeight || 0);
             var visualHeight = visualViewport ? visualViewport.height : window.innerHeight;
@@ -537,13 +540,18 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
             document.body.classList.toggle('app-webview-landscape', isLandscape);
             document.body.classList.toggle('app-webview-keyboard-open', keyboardOpen);
 
-            if (keyboardOpen && (window.__appKeyboardRevealPending || !previousKeyboardOpen)) {
+            if (reveal && keyboardOpen &&
+                (window.__appKeyboardRevealPending || !previousKeyboardOpen)) {
               keepFocusedFieldVisible({ target: currentFocused });
               setTimeout(function () {
                 keepFocusedFieldVisible({ target: currentFocused });
               }, 260);
               window.__appKeyboardRevealPending = false;
-            } else if (isLandscape) {
+            } else if (reveal && isLandscape && !keyboardOpen &&
+                !window.__appLandscapeFormPositioned) {
+              // Position the form once when landscape layout first settles,
+              // never again on subsequent scrolls/resizes.
+              window.__appLandscapeFormPositioned = true;
               keepOfferFormVisible(true);
             }
 
@@ -583,10 +591,13 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
                 updateViewportState();
               });
               window.visualViewport.addEventListener('scroll', function () {
-                updateViewportState();
+                // Keep insets in sync but do not reposition the page.
+                updateViewportState(undefined, false);
               });
             }
             window.addEventListener('orientationchange', function () {
+              // Allow a single re-position after the new orientation settles.
+              window.__appLandscapeFormPositioned = false;
               setTimeout(function () {
                 updateViewportState();
               }, 300);
@@ -713,34 +724,25 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
 
     final controller = _controller;
     if (controller == null) {
+      // Nothing to navigate yet — close the WebView on the first press.
+      widget.onExit();
       return;
     }
 
     _isHandlingBack = true;
     try {
-      if (await _goBackInPage(controller)) {
-        return;
-      }
-
+      // Rely on the WebView's native history, which already tracks SPA
+      // pushState/hashchange navigations. This responds on the first press;
+      // the previous JS history-depth shim could swallow it with a no-op
+      // history.back(). When there is no history, close the WebView.
       if (await controller.canGoBack()) {
         await controller.goBack();
         return;
       }
+
+      widget.onExit();
     } finally {
       _isHandlingBack = false;
-    }
-  }
-
-  Future<bool> _goBackInPage(WebViewController controller) async {
-    try {
-      final result = await controller.runJavaScriptReturningResult(r'''
-        Boolean(window.__appWebViewGoBackInPage && window.__appWebViewGoBackInPage());
-      ''');
-
-      return result == true || result.toString() == 'true';
-    } catch (error) {
-      debugPrint('WEBVIEW PAGE BACK failed: $error');
-      return false;
     }
   }
 

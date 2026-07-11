@@ -1,3 +1,4 @@
+
 # Keep native methods used by Flutter and Android plugins.
 -keepclasseswithmembernames class * {
     native <methods>;

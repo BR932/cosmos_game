@@ -203,7 +203,10 @@ class _SupportScreenState extends State<SupportScreen>
             keepFocusedFieldVisible();
           }
 
-          function updateViewportState(forcedInset) {
+          function updateViewportState(forcedInset, allowReveal) {
+            // allowReveal is false for pure scroll events so the user's
+            // scroll position is never yanked back to the focused field.
+            var reveal = allowReveal !== false;
             var visualViewport = window.visualViewport;
             var layoutHeight = Math.max(root.clientHeight || 0, window.innerHeight || 0);
             var visualHeight = visualViewport ? visualViewport.height : window.innerHeight;
@@ -227,7 +230,8 @@ class _SupportScreenState extends State<SupportScreen>
             root.classList.toggle('app-webview-landscape-keyboard-open', isLandscape && keyboardOpen);
             document.body.classList.toggle('app-webview-keyboard-open', keyboardOpen);
 
-            if (keyboardOpen && (window.__appKeyboardRevealPending || !previousKeyboardOpen)) {
+            if (reveal && keyboardOpen &&
+                (window.__appKeyboardRevealPending || !previousKeyboardOpen)) {
               keepFocusedFieldVisible();
               setTimeout(keepFocusedFieldVisible, 260);
               window.__appKeyboardRevealPending = false;
@@ -252,7 +256,8 @@ class _SupportScreenState extends State<SupportScreen>
                 updateViewportState();
               });
               window.visualViewport.addEventListener('scroll', function () {
-                updateViewportState();
+                // Keep insets in sync but do not reposition the page.
+                updateViewportState(undefined, false);
               });
             }
             window.addEventListener('orientationchange', function () {

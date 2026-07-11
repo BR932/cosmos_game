@@ -55,6 +55,7 @@ Future<void> _showDataOnlyBackgroundNotification(RemoteMessage message) async {
       _androidNotificationChannelName,
       channelDescription: _androidNotificationChannelDescription,
       icon: 'ic_notification',
+      largeIcon: const DrawableResourceAndroidBitmap('ic_notification_large'),
       importance: Importance.max,
       priority: Priority.max,
       playSound: true,

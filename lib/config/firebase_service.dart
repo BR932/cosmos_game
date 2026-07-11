@@ -493,6 +493,7 @@ class FirebaseService {
         _androidNotificationChannelName,
         channelDescription: _androidNotificationChannelDescription,
         icon: 'ic_notification',
+        largeIcon: const DrawableResourceAndroidBitmap('ic_notification_large'),
         importance: Importance.max,
         priority: Priority.max,
         playSound: true,
