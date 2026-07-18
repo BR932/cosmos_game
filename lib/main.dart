@@ -4,7 +4,6 @@ import 'dart:ui' as ui;
 import 'package:flame/game.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'audio/game_audio_controller.dart';
@@ -31,12 +30,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   _ignoreKnownWebViewNullUrlCallbackError();
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  await SystemChrome.setPreferredOrientations(<DeviceOrientation>[
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
+  await allowFreeRotation();
   await configureImmersiveSystemUi();
   await ProgressStorage.instance.init();
   await ConnectivityService.instance.init();
@@ -179,42 +173,51 @@ class _GameShellState extends State<_GameShell> with WidgetsBindingObserver {
       return;
     }
 
+    // The app is still on the loading screen; the cold-start handler in
+    // _finishLoadingScreen picks up the pending notification URL instead.
     if (_showLoading) {
       return;
     }
+
+    FirebaseService.instance.consumePendingNotificationOpen();
+    FirebaseService.instance.consumePendingNotificationUrl();
 
     if (!AppAttributionConfig.enableBackendWebView) {
       debugPrint(
         'NOTIFICATION TAP: ignored because backend WebView is disabled',
       );
-      FirebaseService.instance.consumePendingNotificationOpen();
-      FirebaseService.instance.consumePendingNotificationUrl();
-      setState(() {
-        _showBonusNotification = false;
-        _fallbackWebViewUrl = null;
-        _configWebViewUrl = null;
-      });
       return;
     }
 
-    if (url != null && url.isNotEmpty) {
-      final webViewUrl = await _urlWithSiteParams(url);
-      if (!mounted) {
-        return;
-      }
-
-      debugPrint('NOTIFICATION TAP -> Bonus screen: $webViewUrl');
-      setState(() {
-        _showBonusNotification = true;
-        _fallbackWebViewUrl = webViewUrl;
-        _configWebViewUrl = null;
-      });
+    if (url == null || url.isEmpty) {
+      debugPrint('NOTIFICATION TAP: no url payload');
       return;
     }
 
-    debugPrint('NOTIFICATION TAP: no url payload');
+    // A notification tap means the user already receives notifications, so we
+    // skip the permission prompt and open the URL straight in the WebView.
+    // This also avoids closing an already-open WebView (issue: tapping a
+    // notification used to drop the user back to the bonus prompt).
+    await _openNotificationUrlInWebView(url);
+  }
+
+  Future<void> _openNotificationUrlInWebView(String rawUrl) async {
+    final webViewUrl = await _urlWithSiteParams(rawUrl);
+    if (!mounted || webViewUrl == null || webViewUrl.isEmpty) {
+      return;
+    }
+
+    await _prepareForConfigWebView();
+    if (!mounted) {
+      return;
+    }
+
+    debugPrint('NOTIFICATION -> WebView: $webViewUrl');
     setState(() {
+      _showLoading = false;
       _showBonusNotification = false;
+      _fallbackWebViewUrl = null;
+      _configWebViewUrl = webViewUrl;
     });
   }
 
@@ -298,13 +301,9 @@ class _GameShellState extends State<_GameShell> with WidgetsBindingObserver {
         return;
       }
 
-      final webViewUrl = await _urlWithSiteParams(oneShotUrl);
-      setState(() {
-        _showLoading = false;
-        _showBonusNotification = true;
-        _fallbackWebViewUrl = webViewUrl;
-        _configWebViewUrl = null;
-      });
+      // Cold start from a notification tap: open the notification URL directly
+      // in the WebView instead of the bonus prompt.
+      await _openNotificationUrlInWebView(oneShotUrl ?? notificationUrl);
       return;
     }
 

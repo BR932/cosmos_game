@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -141,6 +142,11 @@ class MainActivity : FlutterActivity() {
                     trimAppStorage(clearPersistentData)
                     result.success(true)
                 }
+                "setOrientationMode" -> {
+                    val mode = call.argument<String>("mode") ?: "sensor"
+                    applyOrientationMode(mode)
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -205,6 +211,26 @@ class MainActivity : FlutterActivity() {
             "authorized"
         } else {
             "denied"
+        }
+    }
+
+    /**
+     * Forces the activity orientation natively. Unlike Flutter's
+     * SystemChrome.setPreferredOrientations (which maps the four
+     * orientations to SCREEN_ORIENTATION_FULL_USER and therefore obeys the
+     * system auto-rotate lock), SCREEN_ORIENTATION_FULL_SENSOR rotates the
+     * screen following the device sensor even when the user has locked
+     * auto-rotation in system settings.
+     */
+    private fun applyOrientationMode(mode: String) {
+        val orientation = when (mode) {
+            "portrait" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            else -> ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+        }
+        runOnUiThread {
+            if (requestedOrientation != orientation) {
+                requestedOrientation = orientation
+            }
         }
     }
 

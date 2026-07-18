@@ -1,9 +1,23 @@
 import 'package:flutter/material.dart';
 
-class LoadingScreen extends StatelessWidget {
+import '../system_ui_config.dart';
+
+class LoadingScreen extends StatefulWidget {
   const LoadingScreen({super.key});
 
   static const Duration displayDuration = Duration(milliseconds: 2500);
+
+  @override
+  State<LoadingScreen> createState() => _LoadingScreenState();
+}
+
+class _LoadingScreenState extends State<LoadingScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Rotate with the device even when the system auto-rotate lock is on.
+    allowFreeRotation();
+  }
 
   @override
   Widget build(BuildContext context) {

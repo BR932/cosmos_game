@@ -1,23 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../audio/game_audio_controller.dart';
-
-const List<DeviceOrientation> _portraitOrientations = <DeviceOrientation>[
-  DeviceOrientation.portraitUp,
-  DeviceOrientation.portraitDown,
-  DeviceOrientation.landscapeLeft,
-  DeviceOrientation.landscapeRight,
-];
-
-const List<DeviceOrientation> _bonusNotificationOrientations =
-    <DeviceOrientation>[
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ];
+import '../system_ui_config.dart';
 
 class BonusNotificationScreen extends StatefulWidget {
   const BonusNotificationScreen({
@@ -40,13 +25,7 @@ class _BonusNotificationScreenState extends State<BonusNotificationScreen> {
   @override
   void initState() {
     super.initState();
-    SystemChrome.setPreferredOrientations(_bonusNotificationOrientations);
-  }
-
-  @override
-  void dispose() {
-    SystemChrome.setPreferredOrientations(_portraitOrientations);
-    super.dispose();
+    allowFreeRotation();
   }
 
   @override

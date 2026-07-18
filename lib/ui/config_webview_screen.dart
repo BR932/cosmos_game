@@ -29,6 +29,7 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
   WebViewController? _controller;
   bool _isLoading = true;
   bool _isHandlingBack = false;
+  bool _isHandlingStoreRedirect = false;
 
   @override
   void initState() {
@@ -36,9 +37,32 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
 
     WidgetsBinding.instance.addObserver(this);
 
+    // The WebView supports both orientations (it has dedicated landscape
+    // layout handling) and must rotate even when the system auto-rotate lock
+    // is on, like the other service screens.
+    unawaited(allowFreeRotation());
     unawaited(configureWebViewSystemUi());
 
     _initWebView();
+  }
+
+  @override
+  void didUpdateWidget(ConfigWebViewScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Reuse the existing WebView (and its system-UI / portrait-lock state)
+    // when the URL changes, e.g. a notification tapped while the WebView is
+    // already open. Navigating in place avoids a dispose/init cycle that would
+    // otherwise reset the orientation and immersive UI.
+    if (oldWidget.url != widget.url) {
+      final controller = _controller;
+      if (controller != null) {
+        setState(() {
+          _isLoading = true;
+        });
+        unawaited(controller.loadRequest(Uri.parse(widget.url)));
+      }
+    }
   }
 
   @override
@@ -146,6 +170,13 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
             _isLoading = false;
           });
         },
+        onUrlChange: (change) {
+          // Safety net for store links reached via an HTTP redirect or
+          // target="_blank", which do not always fire onNavigationRequest on
+          // Android. If the WebView lands on a store URL, bounce it out to the
+          // native store app instead of rendering it inside.
+          unawaited(_redirectStoreUrlIfNeeded(controller, change.url));
+        },
         onNavigationRequest: (request) {
           final uri = Uri.tryParse(request.url);
 
@@ -159,6 +190,14 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
               scheme != 'https' &&
               scheme != 'about' &&
               scheme != 'javascript') {
+            _openExternal(uri);
+            return NavigationDecision.prevent;
+          }
+
+          // Store links (Google Play / App Store) must open in the native
+          // store app, not inside the WebView.
+          if ((scheme == 'http' || scheme == 'https') &&
+              _isAppStoreHost(uri.host)) {
             _openExternal(uri);
             return NavigationDecision.prevent;
           }
@@ -262,16 +301,10 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
             '  overflow-x: auto;',
             '}',
             'input, select, textarea, button {',
-            '  box-sizing: border-box;',
-            '  max-width: 100%;',
+            // Keep native control sizing/appearance; only add the scroll
+            // margins needed to keep a focused field above the keyboard.
             '  scroll-margin-top: 24px;',
             '  scroll-margin-bottom: max(140px, calc(var(--app-keyboard-inset) + 24px));',
-            '}',
-            'body.app-webview-narrow input,',
-            'body.app-webview-narrow select,',
-            'body.app-webview-narrow textarea,',
-            'body.app-webview-narrow button {',
-            '  min-height: 44px;',
             '}',
             'body.app-webview-keyboard-open {',
             '  padding-bottom: max(160px, calc(var(--app-keyboard-inset) + 24px)) !important;',
@@ -649,6 +682,47 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
 
   Future<void> _openExternal(Uri uri) async {
     await ExternalLinkLauncher.open(uri.toString());
+  }
+
+  Future<void> _redirectStoreUrlIfNeeded(
+    WebViewController controller,
+    String? url,
+  ) async {
+    if (url == null || _isHandlingStoreRedirect) {
+      return;
+    }
+
+    final uri = Uri.tryParse(url);
+    if (uri == null || !_isAppStoreHost(uri.host)) {
+      return;
+    }
+
+    _isHandlingStoreRedirect = true;
+    try {
+      await _openExternal(uri);
+
+      // Undo the in-WebView navigation so the store page is not shown inside
+      // the app. Fall back to closing the WebView if there is no history.
+      if (await controller.canGoBack()) {
+        await controller.goBack();
+      } else if (mounted) {
+        widget.onExit();
+      }
+    } finally {
+      _isHandlingStoreRedirect = false;
+    }
+  }
+
+  bool _isAppStoreHost(String host) {
+    final normalized = host.toLowerCase();
+    const storeHosts = <String>{
+      'play.google.com',
+      'market.android.com',
+      'play.app.goo.gl',
+      'apps.apple.com',
+      'itunes.apple.com',
+    };
+    return storeHosts.contains(normalized);
   }
 
   Future<void> _handleAndroidPermissionRequest(

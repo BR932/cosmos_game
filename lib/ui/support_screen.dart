@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../audio/game_audio_controller.dart';
-
+ 
 class SupportScreen extends StatefulWidget {
   const SupportScreen({required this.url, super.key});
 

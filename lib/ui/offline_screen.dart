@@ -1,9 +1,23 @@
 import 'package:flutter/material.dart';
 
-class OfflineScreen extends StatelessWidget {
+import '../system_ui_config.dart';
+
+class OfflineScreen extends StatefulWidget {
   const OfflineScreen({required this.onBack, super.key});
 
   final Future<void> Function() onBack;
+
+  @override
+  State<OfflineScreen> createState() => _OfflineScreenState();
+}
+
+class _OfflineScreenState extends State<OfflineScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Rotate with the device even when the system auto-rotate lock is on.
+    allowFreeRotation();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +44,7 @@ class OfflineScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   GestureDetector(
-                    onTap: onBack,
+                    onTap: widget.onBack,
                     child: Image.asset(
                       'assets/images/back.png',
                       width: 170,
