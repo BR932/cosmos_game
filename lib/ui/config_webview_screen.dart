@@ -725,38 +725,6 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
     return storeHosts.contains(normalized);
   }
 
-  Future<void> _handleAndroidPermissionRequest(
-    PlatformWebViewPermissionRequest request,
-  ) async {
-    final requestedTypes = request.types;
-    final hasProtectedMediaId = requestedTypes.contains(
-      AndroidWebViewPermissionResourceType.protectedMediaId,
-    );
-    final allowedTypes = <WebViewPermissionResourceType>{
-      WebViewPermissionResourceType.camera,
-      WebViewPermissionResourceType.microphone,
-    };
-    final hasOnlyAllowedTypes = requestedTypes.every(allowedTypes.contains);
-
-    try {
-      if (hasProtectedMediaId || !hasOnlyAllowedTypes) {
-        debugPrint(
-          'WEBVIEW PERMISSION denied: '
-          '${requestedTypes.map((type) => type.name).join(', ')}',
-        );
-        await request.deny();
-        return;
-      }
-
-      await request.grant();
-    } catch (error) {
-      debugPrint('WEBVIEW PERMISSION handling failed: $error');
-      try {
-        await request.deny();
-      } catch (_) {}
-    }
-  }
-
   Future<List<String>> _androidFilePicker(FileSelectorParams params) async {
     try {
       final groups = _acceptedTypeGroupsFor(params);
