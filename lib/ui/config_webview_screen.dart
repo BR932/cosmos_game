@@ -135,17 +135,6 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
         onPageStarted: (url) async {
           if (!mounted) return;
 
-          // Inject before page JS runs to block Protected Media ID
-          // requests that trigger unwanted Android system popups.
-          try {
-            await controller.runJavaScript(
-              'try { navigator.requestMediaKeySystemAccess = function() { '
-              'return Promise.reject("blocked"); }; } catch(_) {}',
-            );
-          } catch (_) {}
-
-          if (!mounted) return;
-
           setState(() {
             _isLoading = true;
           });
@@ -210,19 +199,29 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
     if (Platform.isAndroid && controller.platform is AndroidWebViewController) {
       final androidController = controller.platform as AndroidWebViewController;
 
-      // Require user gesture for media playback (including EME/DRM).
-      // This prevents Protected Media ID from auto-requesting on page load,
-      // which would otherwise trigger the Android system popup.
       await androidController.setMediaPlaybackRequiresUserGesture(true);
 
       await androidController.setOnShowFileSelector(_androidFilePicker);
 
-      // Deny ALL permission requests synchronously to prevent the system
-      // popup "Automatic resolution of requests to Protected Media ID"
-      // from appearing. The only permissions we would grant are camera
-      // and microphone, but the synchronous deny prevents the dialog.
+      // Answer permission requests ourselves so Android never shows the
+      // "Automatic resolution of requests to Protected Media ID" dialog.
+      // Protected Media ID (EME/DRM playback) is granted automatically;
+      // everything else (camera, microphone, MIDI) stays denied.
       androidController.setOnPlatformPermissionRequest((request) {
-        request.deny();
+        // grant() approves every resource in the request, so only grant when
+        // the request is exclusively about Protected Media ID.
+        final onlyProtectedMedia =
+            request.types.isNotEmpty &&
+            request.types.every(
+              (type) =>
+                  type == AndroidWebViewPermissionResourceType.protectedMediaId,
+            );
+
+        if (onlyProtectedMedia) {
+          request.grant();
+        } else {
+          request.deny();
+        }
       });
     }
 
@@ -640,13 +639,6 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
           installWebViewBackHandler();
           trimBrowserCacheStorage();
           updateViewportState();
-
-          /* Block Protected Media ID requests that trigger unwanted system popups */
-          try {
-            navigator.requestMediaKeySystemAccess = function() {
-              return Promise.reject('blocked');
-            };
-          } catch(_) {}
         })();
       ''');
     } catch (error) {
@@ -803,7 +795,11 @@ class _ConfigWebViewScreenState extends State<ConfigWebViewScreen>
       child: Scaffold(
         backgroundColor: Colors.black,
         resizeToAvoidBottomInset: false,
+        // Fullscreen: extend edge-to-edge at the bottom (behind the hidden
+        // navigation bar) and only keep the top/side insets so the display
+        // cutout stays clear — leaving just a black strip under the camera.
         body: SafeArea(
+          bottom: false,
           child: LayoutBuilder(
             builder: (context, constraints) {
               final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;

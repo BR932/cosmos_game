@@ -66,11 +66,15 @@ Future<void> configureImmersiveSystemUi() async {
 }
 
 Future<void> configureWebViewSystemUi() async {
-  // Fullscreen WebView: hide the status and navigation bars (immersive) but
-  // keep decorFitsSystemWindows(true) so the display cutout is still avoided
-  // (leaving only a black strip under the camera) and the soft-keyboard insets
-  // continue to be reported for the form-visibility handling.
-  await _setDecorFitsSystemWindows(true);
+  // Fullscreen WebView: draw edge-to-edge behind the (hidden) status and
+  // navigation bars, exactly like the game. decorFitsSystemWindows(false) is
+  // what SystemUiMode.immersiveSticky expects; forcing it back to true fights
+  // the immersive layout and leaves the content inset by the system bars (the
+  // "not fullscreen" bug). The display cutout is avoided in Flutter instead,
+  // via SafeArea(top:) in ConfigWebViewScreen, which leaves only a black strip
+  // under the camera. Keyboard insets keep flowing through MediaQuery.viewInsets
+  // thanks to windowSoftInputMode="adjustResize".
+  await _setDecorFitsSystemWindows(false);
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../audio/game_audio_controller.dart';
 import '../config/app_attribution_config.dart';
-import '../external_link_launcher.dart';
 import 'support_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -56,27 +55,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await GameAudioController.instance.setSoundEnabled(_soundEnabled);
   }
 
-  Future<void> _openExternalLink(String url) async {
-    await GameAudioController.instance.playButtonSound();
-    if (!mounted) return;
-
-    final opened = await ExternalLinkLauncher.open(url);
-
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not open link: $url')));
-    }
+  Future<void> _openSupport() async {
+    await _openInAppWebView(SettingsScreen.supportUrl);
   }
 
-  Future<void> _openSupport() async {
+  Future<void> _openPrivacyPolicy() async {
+    await _openInAppWebView(SettingsScreen.privacyPolicyUrl);
+  }
+
+  Future<void> _openInAppWebView(String url) async {
     await GameAudioController.instance.playButtonSound();
     if (!mounted) return;
 
     await Navigator.of(context).push(
       PageRouteBuilder<void>(
         pageBuilder: (context, animation, secondaryAnimation) =>
-            const SupportScreen(url: SettingsScreen.supportUrl),
+            SupportScreen(url: url),
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
       ),
@@ -146,9 +140,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   soundEnabled: _soundEnabled,
                                   onMusicTap: _toggleMusic,
                                   onSoundTap: _toggleSound,
-                                  onPrivacyTap: () => _openExternalLink(
-                                    SettingsScreen.privacyPolicyUrl,
-                                  ),
+                                  onPrivacyTap: _openPrivacyPolicy,
                                   onSupportTap: _openSupport,
                                 ),
                               ),

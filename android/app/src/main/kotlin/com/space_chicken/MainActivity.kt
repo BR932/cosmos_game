@@ -31,6 +31,14 @@ class MainActivity : FlutterActivity() {
     private val notificationPermissionRequestCode = 41033
     private var pendingNotificationPermissionResult: MethodChannel.Result? = null
 
+    /**
+     * Set while we hand off to an external app (deep link / store / payment).
+     * Suppresses the persistent WebView wipe for that one background cycle,
+     * otherwise cookies and storage are destroyed mid-session and the page
+     * shows an error when the user returns.
+     */
+    private var preserveWebViewSessionOnNextStop = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         trimAppStorage(clearPersistentWebViewData = true)
@@ -40,7 +48,7 @@ class MainActivity : FlutterActivity() {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         if (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
-            trimAppStorage(clearPersistentWebViewData = true)
+            trimAppStorage(clearPersistentWebViewData = !preserveWebViewSessionOnNextStop)
         } else if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
             trimAppStorage(clearPersistentWebViewData = false)
         }
@@ -52,8 +60,14 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onStop() {
-        trimAppStorage(clearPersistentWebViewData = true)
+        trimAppStorage(clearPersistentWebViewData = !preserveWebViewSessionOnNextStop)
         super.onStop()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Back from the external app: restore the normal wipe-on-background rule.
+        preserveWebViewSessionOnNextStop = false
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -88,16 +102,15 @@ class MainActivity : FlutterActivity() {
                         if (url.startsWith("intent:")) {
                             val intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
                             if (intent != null) {
-                                val info = packageManager.resolveActivity(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
-                                if (info != null) {
-                                    startActivity(intent)
+                                if (launchExternal(intent)) {
                                     result.success(true)
                                     return@setMethodCallHandler
-                                } else {
-                                    val fallbackUrl = intent.getStringExtra("browser_fallback_url")
-                                    if (!fallbackUrl.isNullOrBlank()) {
-                                        val fallbackIntent = Intent(Intent.ACTION_VIEW, Uri.parse(fallbackUrl))
-                                        startActivity(fallbackIntent)
+                                }
+
+                                val fallbackUrl = intent.getStringExtra("browser_fallback_url")
+                                if (!fallbackUrl.isNullOrBlank()) {
+                                    val fallbackIntent = Intent(Intent.ACTION_VIEW, Uri.parse(fallbackUrl))
+                                    if (launchExternal(fallbackIntent)) {
                                         result.success(true)
                                         return@setMethodCallHandler
                                     }
@@ -106,11 +119,13 @@ class MainActivity : FlutterActivity() {
                             result.success(false)
                         } else {
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                            startActivity(intent)
-                            result.success(true)
+                            result.success(launchExternal(intent))
                         }
                     } catch (e: Exception) {
-                        result.error("OPEN_FAILED", e.message, null)
+                        // Report as "not opened" rather than an error so the Dart
+                        // side can fall back to url_launcher without surfacing a
+                        // PlatformException to the WebView flow.
+                        result.success(false)
                     }
                 }
                 "getDefaultUserAgent" -> {
@@ -177,6 +192,28 @@ class MainActivity : FlutterActivity() {
         }
 
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    }
+
+    /**
+     * Starts an external activity for a deep link (paytmmp://, phonepe://,
+     * bankid://, market://, intent://...).
+     *
+     * Returns false instead of throwing when no app can handle the URI, so the
+     * caller can fall back rather than propagate an error into the WebView.
+     */
+    private fun launchExternal(intent: Intent): Boolean {
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+        return try {
+            // The handoff backgrounds us; keep the WebView session intact so the
+            // page still works when the user comes back from the payment app.
+            preserveWebViewSessionOnNextStop = true
+            startActivity(intent)
+            true
+        } catch (_: Exception) {
+            preserveWebViewSessionOnNextStop = false
+            false
+        }
     }
 
     private fun requestNotificationPermission(result: MethodChannel.Result) {

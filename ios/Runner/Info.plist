@@ -75,5 +75,17 @@
 		<string>fetch</string>
 		<string>remote-notification</string>
 	</array>
+	<!-- Schemes the WebView may deep-link into. Without this list
+	     canOpenURL/canLaunchUrl always returns false on iOS 9+. -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>paytmmp</string>
+		<string>paytm</string>
+		<string>phonepe</string>
+		<string>bankid</string>
+		<string>upi</string>
+		<string>itms-apps</string>
+		<string>itms-appss</string>
+	</array>
 </dict>
 </plist>

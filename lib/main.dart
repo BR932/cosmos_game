@@ -301,8 +301,6 @@ class _GameShellState extends State<_GameShell> with WidgetsBindingObserver {
         return;
       }
 
-      // Cold start from a notification tap: open the notification URL directly
-      // in the WebView instead of the bonus prompt.
       await _openNotificationUrlInWebView(oneShotUrl ?? notificationUrl);
       return;
     }
